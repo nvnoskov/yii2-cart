@@ -1,0 +1,23 @@
+{
+    "name": "vesna/yii2-cart",
+    "description": "Yii2 component for abandoned shopping carts",
+    "keywords": ["yii", "cart","shopping-cart","commerce"],
+    "type": "yii2-extension",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "StranNik",
+            "email": "nvnoskov@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.4.0",
+        "yiisoft/yii2": "*",
+        "yiisoft/yii2-bootstrap": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "vesna\\cart\\": ""
+        }
+    }
+}
