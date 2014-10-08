@@ -1,15 +1,17 @@
 <?php
 
-namespace vesna\cart;
+namespace vesna\cart\components;
 
 use yii\base\Component;
 use yii\base\Event;
 use Yii;
 
+use vesna\cart\models\Cart as CartModel;
+
 
 /**
  * Class Cart
- * @property CartPositionInterface[] $positions
+ * @property PositionTrait[] $positions
  * @property int $count Total count of positions in the cart
  * @property int $cost Total cost of positions in the cart
  * @property bool $isEmpty Returns true if cart is empty
@@ -17,7 +19,7 @@ use Yii;
  * of positions, quantities and costs
  * @package \vesna\cart
  */
-class ShoppingCart extends Component
+class Cart extends Component
 {
     /** Triggered on position put */
     const EVENT_POSITION_PUT = 'putPosition';
@@ -45,7 +47,7 @@ class ShoppingCart extends Component
 
     public $discounts = [];
     /**
-     * @var CartPositionInterface[]
+     * @var PositionTrait[]
      */
     protected $_positions = [];
 
@@ -55,7 +57,7 @@ class ShoppingCart extends Component
     }
 
     /**
-     * @param CartPositionInterface $position
+     * @param PositionTrait $position
      * @param int $quantity
      */
     public function put($position, $quantity = 1)
@@ -77,7 +79,7 @@ class ShoppingCart extends Component
     }
 
     /**
-     * @param CartPositionInterface $position
+     * @param PositionTrait $position
      * @param int $quantity
      */
     public function update($position, $quantity)
@@ -104,7 +106,7 @@ class ShoppingCart extends Component
 
     /**
      * Removes position from the cart
-     * @param CartPositionInterface $position
+     * @param PositionTrait $position
      */
     public function remove($position)
     {
@@ -133,7 +135,7 @@ class ShoppingCart extends Component
     /**
      * Returns position by it's id. Null is returned if position was not found
      * @param string $id
-     * @return CartPositionInterface|null
+     * @return PositionTrait|null
      */
     public function getPositionById($id)
     {
@@ -154,7 +156,7 @@ class ShoppingCart extends Component
     }
 
     /**
-     * @return CartPositionInterface[]
+     * @return PositionTrait[]
      */
     public function getPositions()
     {
@@ -162,7 +164,7 @@ class ShoppingCart extends Component
     }
 
     /**
-     * @param CartPositionInterface[] $positions
+     * @param PositionTrait[] $positions
      */
     public function setPositions($positions)
     {
@@ -202,7 +204,7 @@ class ShoppingCart extends Component
     {
         $cost = 0;
         foreach ($this->_positions as $position) {
-            $cost += $position->getCost($withDiscount);
+            $cost += $position->getCost();
         }        
         return $cost;
     }
@@ -221,19 +223,52 @@ class ShoppingCart extends Component
         }
         return md5(serialize($data));
     }
+    /**
+    * Return cart code in DB
+    * @return string
+    */
+    public function getCode()
+    {
+        $readCookies = Yii::$app->request->cookies;
+        if (($cookie = $readCookies->get($this->cartId)) !== null) {
+            $cart = (array)json_decode($cookie->value,true);                   
+            $code = $cart['code'];
+        }
+        return $code;
+    }
+
+    public function updateInfo($info){
+        $cartModel = CartModel::find()->where(['code'=>$this->code])->one();
+        if($cartModel){
+            $cartModel->contact = json_encode($info,JSON_UNESCAPED_UNICODE);
+            $cartModel->update();
+        }
+
+    }
 
     protected function saveCart()
     {
+        $readCookies = Yii::$app->request->cookies;
+        if (($cookie = $readCookies->get($this->cartId)) === null) {
+            $cartModel = new CartModel;
+            $cartModel->data = $this->dumpCart();
+            $cartModel->save();
+            $code = $cartModel->code; 
+
+        }else{            
+            $cart = (array)json_decode($cookie->value,true);                   
+            $code = $cart['code'];
+            CartModel::updateAll([
+                'data'=>$this->dumpCart(),'updated_at'=>time()
+            ],'code=:code',[':code'=>$code]);
+        }         
+                         
         $cookies = Yii::$app->response->cookies;
-
-        // if ($cookies->has('language')){
-
-        // }else{                    
-            $cookies->add(new \yii\web\Cookie([
-                'name' => $this->cartId,
-                'value' => json_encode($this->dumpCart()),
-            ]);
-        // }
+        $cookies->add(new \yii\web\Cookie([
+            'name' => $this->cartId,
+            'value' => $this->dumpCart($code),
+        ]));
+        
         Yii::$app->session[$this->cartId] = serialize($this->_positions);
     }
 
@@ -242,21 +277,30 @@ class ShoppingCart extends Component
         if (isset(Yii::$app->session[$this->cartId])){
             $this->_positions = unserialize(Yii::$app->session[$this->cartId]);
         }else{
-            $cookies = Yii::$app->response->cookies;
-            if ($cookies->has($this->cartId)){
-                $cart = json_decode($cookies[$this->cartId]->value,true);
-                foreach ($cart as $id => $quantity) {
-                    $model = $$this->positionClass::findOne($id);                    
-                    $this->put($model,$quantity);
+            $cookies = Yii::$app->request->cookies;            
+            if (($cookie = $cookies->get($this->cartId)) !== null) {
+                $cart = (array)json_decode($cookie->value,true);
+                foreach ((array)$cart['data'] as $id => $quantity) {                    
+                    $positionClass = new $this->positionClass;                    
+                    if($model = $positionClass::findOne($id)){
+                        $this->put($model,$quantity);
+                    }
                 }
+            
             }
         }
     }
 
-    protected function dumpCart(){
+    protected function dumpCart($code=false){
         $cart = [];
         foreach ($this->_positions as $key => $position) {
             $cart[$position->id] = $position->quantity;
+        }
+        if($code){
+            $cart = [
+                'code'=>$code,
+                'data'=>$cart
+            ];
         }
         return json_encode($cart);
     }

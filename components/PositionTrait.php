@@ -1,6 +1,6 @@
 <?php
 
-namespace vesna\cart;
+namespace vesna\cart\components;
 
 use yii\base\Model;
 
@@ -12,18 +12,12 @@ use yii\base\Model;
  */
 trait PositionTrait
 {
-    protected $_quantity;
 
-    /**
-     * Set position discount sum
-     * @param float $price
-     * @return void
-     */
-    public function setDiscountPrice($price)
+
+    public function getId()
     {
-        $this->discountPrice = $price;
+        return $this->id;
     }
-
     public function getQuantity()
     {
         return $this->_quantity;
